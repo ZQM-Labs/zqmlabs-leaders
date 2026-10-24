@@ -27,6 +27,10 @@
   .note { background:var(--panel); border-left:4px solid var(--accent); padding:12px 16px; border-radius:0 10px 10px 0; color:var(--dim); }
   #community-list .card p { margin:.2em 0; }
   .locality { color:var(--accent2); font-size:.9rem; letter-spacing:.04em; }
+  .directory-empty { background:var(--panel); border:1px solid var(--accent); border-radius:12px; padding:18px; }
+  .directory-empty h3 { margin:.1em 0 .3em; color:var(--accent); }
+  .directory-error { background:var(--panel); border:1px solid #e06a6a; border-radius:12px; padding:18px; }
+  .directory-error h3 { margin:.1em 0 .3em; color:#e06a6a; }
   footer { padding:30px 20px 44px; color:var(--dim); font-size:.92rem; border-top:1px solid var(--line); margin-top:36px; }
   footer a { color:var(--dim); }
 </style>
@@ -69,6 +73,7 @@
   quest for one household — and the code <strong>FAMILY25</strong> takes it to $25.
   See <a href="https://zqmlabs.com/tiers/" style="color:var(--accent)">all the tiers</a>.</p>
   <p><a class="btn" href="https://buy.stripe.com/28E14p9hV23bgNA5Fv9bO03">Get the Family Night kit</a></p>
+  <p class="note"><strong>Good to know before you buy.</strong> Your kit is usable as soon as checkout delivers it — coordination with the Lab is about announcing your event, not about unlocking the kit. <strong>No refunds or reschedules:</strong> all kit sales are final. <strong>Kit access expires after the window:</strong> kit access expires after the October 30–November 1, 2026 window.</p>
 
   <h2>How hosting works</h2>
   <ol class="steps">
@@ -84,6 +89,7 @@
   or <a href="mailto:zqmcomputing@gmail.com" style="color:var(--accent)">list your community</a>
   once your kit is in hand.</p>
   <div id="community-list" class="cards"><p style="color:var(--dim)">Loading the directory…</p></div>
+  <noscript><p style="color:var(--dim)">The directory needs JavaScript to load. To list your community without JavaScript, email <a href="mailto:zqmcomputing@gmail.com" style="color:var(--accent)">zqmcomputing@gmail.com</a>.</p></noscript>
 
   <h2>Planning something bigger?</h2>
   <p>Fundraisers, festivals, and multi-day events don't fit a flat kit neatly.
@@ -97,27 +103,56 @@
   <a href="https://software.zqmlabs.com/">Our software</a></p>
 </footer>
 <script>
+  // COMBINED (Track S, 2026-10-24): Track 1 copy + Track 3 empty/error-state
+  // rendering ONLY. The Track 3 listing form and its submit handler are HELD
+  // BACK: the listing-submission endpoint does not exist yet. The
+  // first-listing discount sentence is also OMITTED: its amount/terms are
+  // unset (A9 open question for Alex) and placeholder text must not ship.
+  // Fixes vs Track 1 script: r.ok is checked (a 500 no longer renders as
+  // the empty state), directory values are HTML-escaped (esc) with
+  // https-only URLs (safeHttps), and the no-JS <noscript> fallback above
+  // replaces the permanent "Loading…" text.
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+  const safeHttps = (u) => (typeof u === 'string' && /^https:\/\//i.test(u.trim()) ? u.trim() : '');
+  const showDirectoryError = (box) => {
+    box.innerHTML = '<div class="directory-error"><h3>Directory temporarily unavailable</h3>'
+      + '<p style="color:var(--dim)">The directory could not be reached just now. This does not mean the directory is empty — please try again shortly.</p>'
+      + '<p><button class="btn" type="button" onclick="location.reload()">Try again</button></p></div>';
+  };
   (async () => {
     const box = document.getElementById('community-list');
+    let r;
     try {
-      const r = await fetch('https://api.zqmlabs.com/api/communities');
-      const data = await r.json();
-      const list = (data && data.communities) || [];
-      if (!list.length) {
-        box.innerHTML = '<p style="color:var(--dim)">The first hosts are still signing up — the directory opens with them. Yours could be the first name here.</p>';
-        return;
-      }
-      box.innerHTML = list.map(c => {
-        const loc = [c.locality, c.country].filter(Boolean).join(', ');
-        const book = c.booking_url ? '<a class="btn" href="' + c.booking_url + '">Book a quest</a>' : '';
-        const site = c.website ? '<p><a href="' + c.website + '" style="color:var(--accent)">' + c.website + '</a></p>' : '';
-        return '<div class="card"><h3>' + c.name + '</h3>' +
-          (loc ? '<div class="locality">' + loc + '</div>' : '') +
-          (c.description ? '<p>' + c.description + '</p>' : '') + site + book + '</div>';
-      }).join('');
+      r = await fetch('https://api.zqmlabs.com/api/communities');
     } catch (e) {
-      box.innerHTML = '<p style="color:var(--dim)">The directory could not be reached just now. Try again shortly.</p>';
+      showDirectoryError(box);
+      return;
     }
+    if (!r.ok) { showDirectoryError(box); return; }
+    let data;
+    try {
+      data = await r.json();
+    } catch (e) {
+      showDirectoryError(box);
+      return;
+    }
+    const list = (data && Array.isArray(data.communities)) ? data.communities : null;
+    if (list === null) { showDirectoryError(box); return; }
+    if (!list.length) {
+      box.innerHTML = '<div class="directory-empty"><h3>No communities have registered yet</h3>'
+        + '<p>No communities have registered yet — be the first. <a href="mailto:zqmcomputing@gmail.com" style="color:var(--accent)">List your community</a> and yours could be the first name here.</p></div>';
+      return;
+    }
+    box.innerHTML = list.map(c => {
+      const loc = [c.locality, c.country].filter(Boolean).join(', ');
+      const bookUrl = safeHttps(c.booking_url);
+      const siteUrl = safeHttps(c.website);
+      const book = bookUrl ? '<a class="btn" href="' + esc(bookUrl) + '">Book a quest</a>' : '';
+      const site = siteUrl ? '<p><a href="' + esc(siteUrl) + '" style="color:var(--accent)">' + esc(siteUrl) + '</a></p>' : '';
+      return '<div class="card"><h3>' + esc(c.name) + '</h3>' +
+        (loc ? '<div class="locality">' + esc(loc) + '</div>' : '') +
+        (c.description ? '<p>' + esc(c.description) + '</p>' : '') + site + book + '</div>';
+    }).join('');
   })();
 </script>
 </body>
