@@ -1,9 +1,6 @@
 # zqmlabs-leaders
 
-Source for **leaders.zqmlabs.com** — the organizer/host home for ZQM Labs
-quests: the Community and Office hosting offers, a four-step hosting
-how-to, and the Communities directory, rendered live from the public
-communities API.
+Source for **leaders.zqmlabs.com**, the ZQM Labs hosting and community-organizer site. It explains community and office game-hosting options, provides a four-step hosting guide, and renders a Communities directory from the public communities API. This repository contains the site source and its direct-upload deployment script; verify API availability, published offers, and the target Cloudflare Pages project before treating the site as operational.
 
 ## Layout
 
